@@ -13,7 +13,7 @@ async def do_request():
     global counter, sem
 
     if sem is None:
-        sem = asyncio.Semaphore(10)
+        sem = asyncio.Semaphore(5)
 
     async with sem:
         counter += 1
