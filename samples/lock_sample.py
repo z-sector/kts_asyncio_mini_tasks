@@ -30,7 +30,10 @@ async def main():
 
     try:
         await asyncio.wait_for(
-            asyncio.wait([worker(lock) for _ in range(4)]), timeout=1
+            asyncio.wait(
+                {asyncio.create_task(worker(lock)) for _ in range(4)}
+            ),
+            timeout=1
         )
     except asyncio.TimeoutError:
         res = "Долгое время выполнения!"
