@@ -80,7 +80,14 @@ async def chain_filter_offers(
         price: Optional[int] = None,
         **kw,
 ):
-    pass
+    while True:
+        cxt = await inbound.get()
+        cxt.data = [
+            o
+            for o in cxt.data
+            if (brand is None or o.get("brand") == brand) and (price is None or o.get("price") <= price)
+        ]
+        await outbound.put(cxt)
 
 
 async def cancel_book_request(user_id: int, offer: dict):
