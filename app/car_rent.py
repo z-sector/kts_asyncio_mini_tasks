@@ -1,9 +1,9 @@
 import asyncio
 from asyncio import Queue, Event
 from collections import defaultdict
-from typing import Optional, Any, Dict, Set
+from typing import Optional, Any, Dict, Set, List, TypedDict
 
-from app.const import MAX_PARALLEL_AGG_REQUESTS_COUNT
+from app.const import MAX_PARALLEL_AGG_REQUESTS_COUNT, WORKERS_COUNT
 
 
 class PipelineContext:
@@ -20,7 +20,13 @@ CURRENT_AGG_REQUESTS_COUNT = 0
 BOOKED_CARS: Dict[int, Set[str]] = defaultdict(set)
 
 
-async def get_offers(source: str) -> list[dict]:
+class Offer(TypedDict):
+    url: str
+    price: int
+    brand: str
+
+
+async def get_offers(source: str) -> List[Offer]:
     await asyncio.sleep(1)
     return [
         {"url": f"http://{source}/car?id=1", "price": 1_000, "brand": "LADA"},
@@ -31,33 +37,48 @@ async def get_offers(source: str) -> list[dict]:
     ]
 
 
-async def get_offers_from_sourses(sources: list[str]) -> list[dict]:
+async def get_offers_from_sourses(sources: List[str]) -> List[Offer]:
     global CURRENT_AGG_REQUESTS_COUNT
     if CURRENT_AGG_REQUESTS_COUNT >= MAX_PARALLEL_AGG_REQUESTS_COUNT:
         await asyncio.sleep(10.0)
-
     CURRENT_AGG_REQUESTS_COUNT += 1
     # TODO реализовать получение всех предложений
+    responses: List[List[dict]] = await asyncio.gather(*[get_offers(s) for s in sources])
     CURRENT_AGG_REQUESTS_COUNT -= 1
 
     out = list()
     # TODO корректно оформить данные в out
+    for r in responses:
+        out.extend(r)
 
-    return out
+    return sorted(out, key=lambda x: x['url'])
+
+
+async def worker_combine_service_offers(
+        inbound: asyncio.Queue, outbound: asyncio.Queue, sem: asyncio.Semaphore
+):
+    while True:
+        ctx: PipelineContext = await inbound.get()
+        async with sem:
+            ctx.data = await get_offers_from_sourses(ctx.data)
+        await outbound.put(ctx)
 
 
 # TODO
 async def chain_combine_service_offers(inbound: Queue, outbound: Queue, **kw):
-    pass
+    sem = asyncio.Semaphore(MAX_PARALLEL_AGG_REQUESTS_COUNT)
+    await asyncio.gather(
+        *[worker_combine_service_offers(inbound, outbound, sem) for _ in range(WORKERS_COUNT)]
+    )
 
 
 # TODO
 async def chain_filter_offers(
-    inbound: Queue,
-    outbound: Queue,
-    brand: Optional[str] = None,
-    price: Optional[int] = None,
-    **kw,
+        inbound: Queue,
+        outbound: Queue,
+        brand: Optional[str] = None,
+        price: Optional[int] = None,
+        **kw,
 ):
     pass
 

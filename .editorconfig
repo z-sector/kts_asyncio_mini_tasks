@@ -15,13 +15,13 @@ ij_continuation_indent_size = 8
 [Makefile]
 indent_style = tab
 
-[{.gitlab-ci.yml}]
-indent_style = space
-indent_size = 2
-
-[{env,.env}]
-indent_style = none
-indent_size = none
-end_of_line = none
-trim_trailing_whitespace = none
-charset = none
+# [{.gitlab-ci.yml}]
+# indent_style = space
+# indent_size = 2
+#
+# [{env,.env}]
+# indent_style = none
+# indent_size = none
+# end_of_line = none
+# trim_trailing_whitespace = none
+# charset = none

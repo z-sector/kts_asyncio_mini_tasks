@@ -48,7 +48,6 @@ class TestChainCombineService:
 
         res = list()
         for i in range(chunks_count):
-
             ctx = await outbound.get()
             res.append(ctx.data)
 
