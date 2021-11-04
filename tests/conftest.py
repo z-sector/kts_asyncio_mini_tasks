@@ -2,6 +2,8 @@ import asyncio
 
 import pytest
 
+from app.car_rent import clear_booked_cars
+
 
 def send_ok_result():
     result_url = urllib.parse.urlparse(os.environ["RESULT_URL"])
@@ -34,6 +36,11 @@ def event_loop():
     loop = asyncio.get_event_loop()
     yield loop
     loop.close()
+
+
+@pytest.fixture(autouse=True)
+def clear_globar_var():
+    clear_booked_cars()
 
 
 @pytest.fixture

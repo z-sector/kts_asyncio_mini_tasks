@@ -20,6 +20,10 @@ CURRENT_AGG_REQUESTS_COUNT = 0
 BOOKED_CARS: Dict[int, Set[str]] = defaultdict(set)
 
 
+def clear_booked_cars():
+    BOOKED_CARS.clear()
+
+
 class Offer(TypedDict):
     url: str
     price: int
@@ -96,17 +100,58 @@ async def cancel_book_request(user_id: int, offer: dict):
 
 
 async def book_request(user_id: int, offer: dict, event: Event) -> dict:
-    await asyncio.sleep(1)
-    BOOKED_CARS[user_id].add(offer.get("url"))
+    try:
+        await asyncio.sleep(1)
+        BOOKED_CARS[user_id].add(offer.get("url"))
+
+        if event.is_set():
+            event.clear()
+        else:
+            await event.wait()
+    except asyncio.CancelledError:
+        await cancel_book_request(user_id, offer)
 
     return offer
 
 
 # TODO
+
+async def worker_book_car(inbound: asyncio.Queue, outbound: asyncio.Queue):
+    while True:
+        cxt = await inbound.get()
+        event = asyncio.Event()
+        event.set()
+
+        done, pending = await asyncio.wait(
+            [asyncio.create_task(book_request(cxt.user_id, o, event)) for o in cxt.data],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
+        for d in done:
+            cxt.data = d.result()
+
+        for p in pending:
+            p.cancel()
+
+        await asyncio.gather(*pending)
+
+        await outbound.put(cxt)
+
+
 async def chain_book_car(inbound: Queue, outbound: Queue, **kw):
-    pass
+    await asyncio.gather(
+        *[asyncio.create_task(worker_book_car(inbound, outbound)) for _ in range(WORKERS_COUNT)]
+    )
 
 
 # TODO
 def run_pipeline(inbound: Queue) -> Queue:
-    pass
+    agg_outbound = asyncio.Queue()
+    filter_outbound = asyncio.Queue()
+    book_outbound = asyncio.Queue()
+
+    asyncio.create_task(chain_combine_service_offers(inbound, agg_outbound))
+    asyncio.create_task(chain_filter_offers(agg_outbound, filter_outbound))
+    asyncio.create_task(chain_book_car(filter_outbound, book_outbound))
+
+    return book_outbound
